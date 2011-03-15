@@ -1,21 +1,28 @@
 class ChatController < WebSocketApplicationController
-  periodic_timer :retrieve_messages, :every => 2
   on_data :receive_message
+  on_start :retrieve_messages
+
+  on_new_data :new_data
+
+  def new_data(msg)
+    list = [{ "from" => msg.name, "msg" => msg.message, "sent" => msg.sent_at.to_formatted_s(:short) }]
+    render list.to_json
+  end
   
   def retrieve_messages
-    @last_message ||= (Time.now - 1.minute)
+    @last_message ||= (Time.now - 10.hours)
     Chat.recent(@last_message).all do |messages|
       list = messages.map { |msg| { "from" => msg.name, "msg" => msg.message, "sent" => msg.sent_at.to_formatted_s(:short) } }
       if list.size > 0
-        @last_message = messages.first.try(:sent_at) || @last_message
+        @last_message = messages.last.try(:sent_at) || @last_message
         render list.to_json
       end
     end
   end
-  
+
   def receive_message(data)
     params = Rack::Utils.parse_query(data)
-    
+
     chat = Chat.new :name => params["from"],
       :sent_at => Time.now,
       :message => params["msg"]
